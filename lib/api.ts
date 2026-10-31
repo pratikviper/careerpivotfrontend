@@ -2,7 +2,9 @@ import axios, { AxiosError, type AxiosRequestConfig } from "axios"
 
 import { clearSession, getToken } from "@/lib/auth-storage"
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+// Empty means same-origin: the browser calls this Next app, and next.config
+// rewrites /api/* to the FastAPI server (API_PROXY_TARGET).
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ""
 
 export class ApiError extends Error {
   status: number

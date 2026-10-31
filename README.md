@@ -6,18 +6,17 @@ A signed-in user can register, upload a resume, set a target role, analyze skill
 
 ## Setup
 
-1. Start the backend on port 8000. CORS already allows `http://localhost:3000`.
-2. Copy the environment file and install dependencies:
+1. Start the backend on port 8000.
+2. Install dependencies and start the app:
 
 ```bash
-cp .env.example .env.local
 npm install
 npm run dev
 ```
 
 3. Open [http://localhost:3000](http://localhost:3000).
 
-`NEXT_PUBLIC_API_URL` defaults to `http://localhost:8000`.
+The browser calls this app’s `/api` routes. Next.js forwards them to `API_PROXY_TARGET`, which defaults to `http://127.0.0.1:8000`. Set `NEXT_PUBLIC_API_URL` only when the browser should call the API host directly; that host must list this site in `CORS_ORIGINS`.
 
 ## Scripts
 

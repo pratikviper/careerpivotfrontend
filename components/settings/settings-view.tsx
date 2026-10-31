@@ -52,8 +52,13 @@ export function SettingsView() {
       <Card>
         <CardHeader><CardTitle>API</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <p><span className="text-muted-foreground">Base URL: </span>{API_URL}</p>
-          <p className="text-muted-foreground">Set NEXT_PUBLIC_API_URL if the backend is not on this address. Career details are edited on My Profile.</p>
+          <p>
+            <span className="text-muted-foreground">Base URL: </span>
+            {API_URL || "This site (/api), forwarded to the backend"}
+          </p>
+          <p className="text-muted-foreground">
+            API calls go through this app unless NEXT_PUBLIC_API_URL points at the backend directly. Career details are edited on My Profile.
+          </p>
           <Button variant="outline" onClick={() => router.push("/profile")}>Edit profile</Button>
         </CardContent>
       </Card>
