@@ -98,52 +98,53 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
 
+  const waiting = loading || !user
+
   useEffect(() => {
     if (!loading && !user) router.replace("/login")
   }, [loading, user, router])
 
-  if (loading || !user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Loading your workspace…
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-background">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-border bg-sidebar md:flex">
-        <div className="px-4 py-5">
-          <Logo />
-        </div>
-        <NavLinks />
-        <UserBlock />
-      </aside>
-
-      {open ? (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <button className="absolute inset-0 bg-black/40" aria-label="Close menu" onClick={() => setOpen(false)} />
-          <aside className="relative flex h-full w-72 flex-col bg-sidebar shadow-xl">
-            <div className="flex items-center justify-between px-4 py-4">
-              <Logo />
-              <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Close menu">
-                <X />
-              </Button>
-            </div>
-            <NavLinks onNavigate={() => setOpen(false)} />
-            <UserBlock />
-          </aside>
+      {waiting ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background text-sm text-muted-foreground">
+          Loading your workspace…
         </div>
       ) : null}
+      <div inert={waiting || undefined} className={waiting ? "invisible" : undefined}>
+        <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-border bg-sidebar md:flex">
+          <div className="px-4 py-5">
+            <Logo />
+          </div>
+          <NavLinks />
+          <UserBlock />
+        </aside>
 
-      <div className="md:pl-64">
-        <div className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur md:hidden">
-          <Button variant="ghost" size="icon" onClick={() => setOpen(true)} aria-label="Open menu" aria-expanded={open}>
-            <Menu />
-          </Button>
-          <Logo />
+        {open ? (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <button className="absolute inset-0 bg-black/40" aria-label="Close menu" onClick={() => setOpen(false)} />
+            <aside className="relative flex h-full w-72 flex-col bg-sidebar shadow-xl">
+              <div className="flex items-center justify-between px-4 py-4">
+                <Logo />
+                <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Close menu">
+                  <X />
+                </Button>
+              </div>
+              <NavLinks onNavigate={() => setOpen(false)} />
+              <UserBlock />
+            </aside>
+          </div>
+        ) : null}
+
+        <div className="md:pl-64">
+          <div className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur md:hidden">
+            <Button variant="ghost" size="icon" onClick={() => setOpen(true)} aria-label="Open menu" aria-expanded={open}>
+              <Menu />
+            </Button>
+            <Logo />
+          </div>
+          <main className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8 md:py-8">{children}</main>
         </div>
-        <main className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8 md:py-8">{children}</main>
       </div>
     </div>
   )

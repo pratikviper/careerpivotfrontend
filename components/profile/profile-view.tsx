@@ -121,8 +121,8 @@ export function ProfileView() {
 
   async function onUpload(file: File | undefined) {
     if (!file) return
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      toast.error("Only PDF resumes are supported.")
+    if (!/\.(pdf|docx)$/i.test(file.name)) {
+      toast.error("Upload a PDF or Word (.docx) resume. Old .doc files are not supported.")
       return
     }
     setPhase("uploading")
@@ -195,7 +195,7 @@ export function ProfileView() {
       <PageHeader
         eyebrow="Step 1 · Resume, then confirm"
         title="My profile"
-        description="Upload a PDF, correct anything the parser missed, and save. Saving confirms your skill list."
+        description="Upload a PDF or Word resume, correct anything the parser missed, and save. Saving confirms your skill list."
         actions={
           <Button type="submit" disabled={form.formState.isSubmitting || phase !== "idle"}>
             {form.formState.isSubmitting ? "Saving…" : "Save profile"}
@@ -212,14 +212,14 @@ export function ProfileView() {
       <Card>
         <CardHeader>
           <CardTitle>Resume</CardTitle>
-          <p className="text-sm text-muted-foreground">PDF only, up to 5 MB. Parsing runs after the upload finishes.</p>
+          <p className="text-sm text-muted-foreground">PDF or Word (.docx), up to 5 MB. Parsing runs after the upload finishes.</p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Field label="Upload PDF" htmlFor="resume">
+          <Field label="Upload resume" htmlFor="resume">
             <Input
               id="resume"
               type="file"
-              accept="application/pdf,.pdf"
+              accept="application/pdf,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               disabled={phase !== "idle"}
               onChange={(event) => {
                 const file = event.target.files?.[0]

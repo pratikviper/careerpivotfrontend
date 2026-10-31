@@ -130,6 +130,8 @@ export interface JobSummary {
   title: string
   company: string | null
   source_type: string
+  source_provider?: string | null
+  role_family?: string | null
   source_url: string | null
   generated_by: string | null
   required_count: number
@@ -191,11 +193,29 @@ export interface SkillGapReport {
   id: number
   target_role: string | null
   job_description_ids: number[]
+  /** How many postings the report is based on. */
+  job_count: number
+  job_sources: Record<string, number>
+  role_family: string | null
+  /** e.g. "Based on 20 job postings (20 seed)" */
+  based_on: string
   match_score: number
   summary: string | null
   generated_by: string | null
   created_at: string
   items: SkillGapItem[]
+}
+
+export interface MarketImportResult {
+  source: "seed" | "jsearch" | "adzuna"
+  requested_role: string
+  role_family: string | null
+  imported: number
+  skipped_duplicates: number
+  job_ids: number[]
+  cached: boolean
+  fallback_reason: string | null
+  notes: string[]
 }
 
 export interface SkillGapSummary {
@@ -206,6 +226,16 @@ export interface SkillGapSummary {
   created_at: string
 }
 
+/** A link from the curated list, or a labelled search link when a skill has no curated list. */
+export interface Resource {
+  id: string
+  title: string
+  url: string
+  type: "docs" | "course" | "interactive" | "book" | "video" | "article" | "search" | string
+  hours: number | null
+  provider: string | null
+}
+
 export interface WeeklyTask {
   id: number
   week_number: number
@@ -214,6 +244,7 @@ export interface WeeklyTask {
   topics: string[]
   activities: string[]
   exercises: string[]
+  resources?: Resource[]
   estimated_hours: number
   expected_outcome: string
   status: TaskStatus | string
@@ -248,6 +279,27 @@ export interface PlanChangeSummary {
   struggling_skills?: string[]
   focus_skills?: string[]
   deferred?: string[]
+  /** Human-readable "why" lines, e.g. "Docker: mock-interview score 0.2/10 -> +6h (12h to 18h), starts week 1". */
+  reasons?: string[]
+  dropped_skills?: string[]
+  triggered_by?: string
+}
+
+export interface ProficiencyUpdate {
+  skill_name: string
+  before: number
+  after: number
+  evidence: string
+}
+
+/** What the closed loop did after new evidence (interview, assessment, task update) arrived. */
+export interface Adaptation {
+  trigger: string
+  proficiency_updates: ProficiencyUpdate[]
+  gaps_recomputed: boolean
+  proposal_plan_id: number | null
+  reasons: string[]
+  message: string
 }
 
 export interface PlanSummary {
@@ -293,6 +345,10 @@ export interface Project {
   difficulty: string
   deliverables: string[]
   estimated_hours: number | null
+  /** Which curated template this came from (null for the generic fallback). */
+  template_id?: string | null
+  /** Which of your gaps it closes, in priority order. */
+  gaps_covered?: string[]
   status: ProjectStatus | string
   repo_url: string | null
   notes: string | null
@@ -309,9 +365,39 @@ export interface EvaluationScores {
   relevance?: number
 }
 
+export interface RubricLevel {
+  level: number
+  label: string
+  min: number
+  max: number
+}
+
+export interface RubricCriterion {
+  id: string
+  name: string
+  question: string
+  /** keys "1".."5" */
+  anchors: Record<string, string>
+}
+
+export interface Rubric {
+  version: string
+  title: string
+  description: string
+  scale: { min: number; max: number }
+  levels: RubricLevel[]
+  rules: string[]
+  notes: string[]
+  criteria: RubricCriterion[]
+}
+
 export interface AnswerEvaluation {
   rubric_version: string
   scores: EvaluationScores
+  /** 1-5 level of each score, per the rubric bands */
+  levels?: Record<string, number>
+  /** criterion -> quote from the candidate's answer that supports the score (verified server-side) */
+  evidence?: Record<string, string>
   overall_score: number
   strengths: string[]
   improvements: string[]
@@ -359,7 +445,12 @@ export interface InterviewSummary {
 export interface Interview extends InterviewSummary {
   summary: InterviewSummaryStats
   questions: InterviewQuestion[]
+  adaptation?: Adaptation | null
 }
+
+export type CompanySize = "1-10" | "11-50" | "51-200" | "201-1000" | "1001+"
+export type ApplicationChannel = "referral" | "direct" | "job_board" | "recruiter" | "other"
+export type WorkMode = "remote" | "hybrid" | "onsite"
 
 export interface Application {
   id: number
@@ -372,6 +463,14 @@ export interface Application {
   reached_interview: boolean
   experience_level: string | null
   skills_highlighted: string[]
+  posting_url: string | null
+  role_family: string | null
+  industry: string | null
+  company_size: CompanySize | null
+  channel: ApplicationChannel | null
+  resume_version: string | null
+  work_mode: WorkMode | null
+  location: string | null
   notes: string | null
   interview_feedback: string | null
   outcome: string | null
@@ -406,6 +505,12 @@ export interface ApplicationStats {
   }
   by_role: Record<string, RateStat>
   by_experience_level: Record<string, RateStat>
+  by_role_family?: Record<string, RateStat>
+  by_industry?: Record<string, RateStat>
+  by_company_size?: Record<string, RateStat>
+  by_channel?: Record<string, RateStat>
+  by_resume_version?: Record<string, RateStat>
+  by_work_mode?: Record<string, RateStat>
   skills_vs_response: Array<{ skill: string; with: RateStat; without: RateStat; difference: number }>
   skill_combinations: Array<RateStat & { skills: string[] }>
   data_sufficiency: {
@@ -432,7 +537,46 @@ export interface ApplicationInput {
   job_description_text?: string | null
   experience_level?: ExperienceLevel | null
   skills_highlighted?: string[]
+  posting_url?: string | null
+  industry?: string | null
+  company_size?: CompanySize | null
+  channel?: ApplicationChannel | null
+  resume_version?: string | null
+  work_mode?: WorkMode | null
+  location?: string | null
   notes?: string | null
+}
+
+export interface Insight {
+  dimension: string
+  dimension_label: string
+  group: string
+  label: string
+  direction: "higher" | "lower"
+  /** "reliable": the 95% intervals of the group and all other applications do not overlap. */
+  confidence: "reliable" | "early_signal"
+  n: number
+  responses: number
+  response_rate: number
+  ci95: [number, number]
+  rest_n: number
+  rest_response_rate: number
+  rest_ci95: [number, number]
+  difference: number
+  text: string
+  suggestion: string
+}
+
+export interface Recommendations {
+  n_applications: number
+  n_counted: number
+  excluded_recent_pending: number
+  baseline_response_rate: number | null
+  baseline_ci95: [number, number] | null
+  sufficient_data: boolean
+  message: string
+  insights: Insight[]
+  disclaimer: string
 }
 
 export interface Assessment {
@@ -443,6 +587,7 @@ export interface Assessment {
   assessment_method: string | null
   notes: string | null
   created_at: string
+  adaptation?: Adaptation | null
 }
 
 export interface Struggle {

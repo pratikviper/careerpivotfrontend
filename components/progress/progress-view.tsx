@@ -50,10 +50,13 @@ export function ProgressView() {
     }
     setBusy(true)
     try {
-      await createAssessment({ skill_name: skill.trim(), proficiency: Number(level), notes: notes.trim() || null })
+      const saved = await createAssessment({ skill_name: skill.trim(), proficiency: Number(level), notes: notes.trim() || null })
       setSkill("")
       setNotes("")
       toast.success("Assessment saved.")
+      if (saved.adaptation?.proposal_plan_id) {
+        toast.info(saved.adaptation.message, { description: saved.adaptation.reasons.join(" · "), duration: 10000 })
+      }
       setProgress(await getProgress(false))
     } catch (err) {
       toast.error(errorMessage(err))

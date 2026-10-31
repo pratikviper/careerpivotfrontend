@@ -1,20 +1,21 @@
 import { errorMessage } from "@/lib/api"
-import { listApplications } from "@/services/application.service"
+import { getRecommendations, listApplications } from "@/services/application.service"
 import { listInterviews } from "@/services/interview.service"
 import { listJobs } from "@/services/jobs.service"
 import { getPlan, listPlans } from "@/services/learning.service"
 import { getProfile } from "@/services/profile.service"
 import { getProgress } from "@/services/progress.service"
 import { getAnalysis, listAnalyses } from "@/services/skill-gap.service"
-import type { Application, InterviewSummary, JobSummary, Plan, PlanSummary, Profile, ProgressOverview, SkillGapReport } from "@/types/api"
+import type { Application, Recommendations, InterviewSummary, JobSummary, Plan, Profile, ProgressOverview, SkillGapReport } from "@/types/api"
 
 export interface DashboardData {
   profile: Profile | null
   activePlan: Plan | null
-  proposedPlans: PlanSummary[]
+  proposedPlans: Plan[]
   analysis: SkillGapReport | null
   interviews: InterviewSummary[]
   applications: Application[]
+  recommendations: Recommendations | null
   progress: ProgressOverview | null
   jobs: JobSummary[]
   errors: string[]
@@ -41,8 +42,12 @@ export async function loadDashboard(): Promise<DashboardData> {
     settle("Jobs", listJobs(), errors),
   ])
 
+  const recommendations = await settle("Application insights", getRecommendations(), errors)
   const activeSummary = planSummaries?.find((plan) => plan.status === "active") ?? null
-  const proposedPlans = planSummaries?.filter((plan) => plan.status === "proposed") ?? []
+  const proposedSummaries = planSummaries?.filter((plan) => plan.status === "proposed") ?? []
+  const proposedPlans = (
+    await Promise.all(proposedSummaries.slice(0, 1).map((plan) => settle("Proposed plan", getPlan(plan.id), errors)))
+  ).filter((plan): plan is Plan => plan !== null)
   const activePlan = activeSummary ? await settle("Active plan", getPlan(activeSummary.id), errors) : null
   const latest = analyses?.[0]
   const analysis = latest ? await settle("Skill gap report", getAnalysis(latest.id), errors) : null
@@ -54,6 +59,7 @@ export async function loadDashboard(): Promise<DashboardData> {
     analysis,
     interviews: interviews ?? [],
     applications: applications ?? [],
+    recommendations,
     progress,
     jobs: jobs ?? [],
     errors,

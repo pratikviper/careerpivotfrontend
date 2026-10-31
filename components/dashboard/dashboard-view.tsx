@@ -4,6 +4,7 @@ import { Briefcase, FileSearch, MessagesSquare, Route } from "lucide-react"
 import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
 
+import { InsightsCard } from "@/components/applications/insights-card"
 import { BarCompareChart, TrendChart } from "@/components/charts/charts"
 import { EmptyState, ErrorState, PageHeader, PageSkeleton, StatCard } from "@/components/shared/states"
 import { Badge } from "@/components/ui/badge"
@@ -100,6 +101,26 @@ export function DashboardView() {
           </Button>
         </div>
       ) : null}
+
+      {data.proposedPlans.map((plan) => (
+        <div key={plan.id} className="space-y-2 rounded-xl border border-chart-2/60 bg-accent px-4 py-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-medium">
+              Your plan has a pending {plan.change_summary?.triggered_by?.startsWith("auto:") ? "automatic " : ""}adjustment waiting for review.
+            </p>
+            <Button asChild size="sm"><Link href="/learning-plan">Review changes</Link></Button>
+          </div>
+          {(plan.change_summary?.reasons?.length ?? 0) > 0 ? (
+            <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+              {plan.change_summary.reasons!.map((reason) => <li key={reason}>{reason}</li>)}
+            </ul>
+          ) : plan.adjustment_reason ? (
+            <p className="text-sm text-muted-foreground">{plan.adjustment_reason}</p>
+          ) : null}
+        </div>
+      ))}
+
+      {data.recommendations && data.recommendations.insights.length > 0 ? <InsightsCard data={data.recommendations} compact /> : null}
 
       {data.errors.length > 0 ? (
         <p className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground">

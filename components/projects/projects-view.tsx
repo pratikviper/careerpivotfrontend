@@ -123,6 +123,9 @@ export function ProjectsView() {
                 <Badge variant={project.status === "completed" ? "success" : project.status === "in_progress" ? "warning" : "secondary"}>{STATUS_LABEL[project.status] ?? project.status}</Badge>
               </div>
               <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">{project.description}</p>
+              {project.gaps_covered && project.gaps_covered.length > 0 ? (
+                <p className="mt-3 text-xs font-medium">Closes {project.gaps_covered.length} of your gaps: {project.gaps_covered.slice(0, 4).join(", ")}</p>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {project.skills_covered.slice(0, 4).map((item) => <Badge key={item} variant="outline">{item}</Badge>)}
               </div>
@@ -143,6 +146,12 @@ export function ProjectsView() {
           <div className="space-y-4 text-sm">
             <p className="text-muted-foreground">{selected.problem_statement}</p>
             <p>{selected.description}</p>
+            {selected.gaps_covered && selected.gaps_covered.length > 0 ? (
+              <div>
+                <p className="font-medium">Your gaps this closes</p>
+                <p>{selected.gaps_covered.join(", ")}</p>
+              </div>
+            ) : null}
             <div>
               <p className="font-medium">Skills</p>
               <p>{selected.skills_covered.join(", ")}</p>

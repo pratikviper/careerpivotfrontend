@@ -82,11 +82,25 @@ export function LearningPlanView() {
     })
   }
 
+  // The backend may have proposed an adjustment after a slipping task; pick it up without a full reload.
+  async function refreshProposals(announce: boolean) {
+    try {
+      const summaries = await listPlans("proposed")
+      const plans = await Promise.all(summaries.map((plan) => getPlan(plan.id)))
+      const fresh = plans.some((plan) => !proposed.some((current) => current.id === plan.id))
+      setProposed(plans)
+      if (announce && fresh) toast.info("Your progress changed the picture: a plan adjustment is ready to review.")
+    } catch {
+      /* the task update itself already succeeded */
+    }
+  }
+
   async function setStatus(task: WeeklyTask, status: TaskStatus) {
     if (!active) return
     try {
       const next = await updateTask(active.id, task.id, { status })
       replaceTask(next)
+      if (status === "skipped") void refreshProposals(true)
     } catch (err) {
       toast.error(errorMessage(err))
     }
@@ -290,6 +304,21 @@ export function LearningPlanView() {
               <p className="font-medium">Exercises</p>
               <ul className="mt-1 list-disc pl-5">{selected.exercises.map((item) => <li key={item}>{item}</li>)}</ul>
             </div>
+            {selected.resources && selected.resources.length > 0 ? (
+              <div>
+                <p className="font-medium">Free resources</p>
+                <ul className="mt-1 space-y-1">
+                  {selected.resources.map((resource) => (
+                    <li key={resource.id}>
+                      <a className="underline" href={resource.url} target="_blank" rel="noreferrer">{resource.title}</a>
+                      <span className="text-muted-foreground">
+                        {resource.type === "search" ? " · web search (not a vetted course)" : ` · ${resource.provider ?? resource.type}${resource.hours ? ` · about ${resource.hours}h` : ""}`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <p><span className="font-medium">Expected outcome: </span>{selected.expected_outcome}</p>
             <Field label="How hard was this?" htmlFor="rating">
               <Select id="rating" value={rating} onChange={(event) => setRating(event.target.value)}>
@@ -316,6 +345,7 @@ export function LearningPlanView() {
                     replaceTask(task)
                     setSelected(null)
                     toast.success("Task updated.")
+                    if (rating && Number(rating) >= 4) void refreshProposals(true)
                   })
                   .catch((err) => toast.error(errorMessage(err)))
               }}

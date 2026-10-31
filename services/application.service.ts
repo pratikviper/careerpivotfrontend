@@ -1,5 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api"
-import type { Application, ApplicationAnalytics, ApplicationInput, ApplicationStatus } from "@/types/api"
+import type { Application, ApplicationAnalytics, ApplicationInput, ApplicationStatus, Recommendations } from "@/types/api"
 
 export function listApplications(status?: ApplicationStatus) {
   return apiGet<Application[]>("/api/applications", { params: status ? { status } : undefined })
@@ -30,4 +30,9 @@ export function getApplicationAnalytics(includeAiSummary = false) {
   return apiGet<ApplicationAnalytics>("/api/applications/analytics", {
     params: { include_ai_summary: includeAiSummary },
   })
+}
+
+/** 3-5 plain-English insights on which kinds of roles respond, each labelled reliable or early signal. */
+export function getRecommendations() {
+  return apiGet<Recommendations>("/api/applications/recommendations")
 }

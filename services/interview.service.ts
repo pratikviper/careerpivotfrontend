@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from "@/lib/api"
-import type { Interview, InterviewSummary, InterviewType } from "@/types/api"
+import type { Interview, InterviewSummary, InterviewType, Rubric } from "@/types/api"
 
 export function listInterviews() {
   return apiGet<InterviewSummary[]>("/api/interviews")
@@ -34,4 +34,8 @@ export function evaluateInterview(interviewId: number, questionIds?: number[]) {
   return apiPost<Interview>(`/api/interviews/${interviewId}/evaluate`, {
     question_ids: questionIds ?? null,
   })
+}
+
+export function getRubric() {
+  return apiGet<Rubric>("/api/interviews/rubric")
 }

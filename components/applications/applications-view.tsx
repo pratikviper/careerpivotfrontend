@@ -18,8 +18,9 @@ import { Field } from "@/components/ui/label"
 import { Modal } from "@/components/ui/modal"
 import { errorMessage } from "@/lib/api"
 import { formatDate, formatRate, todayInputValue, titleCase } from "@/lib/format"
-import { createApplication, deleteApplication, getApplicationAnalytics, listApplications, updateApplication } from "@/services/application.service"
-import type { Application, ApplicationAnalytics, ApplicationStatus, ExperienceLevel } from "@/types/api"
+import { InsightsCard } from "@/components/applications/insights-card"
+import { createApplication, deleteApplication, getApplicationAnalytics, getRecommendations, listApplications, updateApplication } from "@/services/application.service"
+import type { Application, ApplicationAnalytics, ApplicationChannel, ApplicationStatus, CompanySize, ExperienceLevel, Recommendations, WorkMode } from "@/types/api"
 
 const STATUSES: ApplicationStatus[] = ["applied", "interview", "rejected", "offer"]
 
@@ -28,7 +29,13 @@ const schema = z.object({
   role_title: z.string().trim().min(1, "Job title is required").max(200),
   applied_date: z.string().min(1, "Application date is required"),
   status: z.enum(["applied", "interview", "rejected", "offer"]),
-  job_url: z.string(),
+  posting_url: z.string().refine((value) => !value.trim() || /^https?:\/\//i.test(value.trim()), "Must start with http:// or https://"),
+  industry: z.string().max(60),
+  company_size: z.enum(["", "1-10", "11-50", "51-200", "201-1000", "1001+"]),
+  channel: z.enum(["", "referral", "direct", "job_board", "recruiter", "other"]),
+  resume_version: z.string().max(60),
+  work_mode: z.enum(["", "remote", "hybrid", "onsite"]),
+  location: z.string().max(120),
   job_description_text: z.string().max(50000),
   experience_level: z.enum(["", "entry", "junior", "mid", "senior", "lead"]),
   notes: z.string().max(5000),
@@ -38,26 +45,18 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-function splitNotes(notes: string | null) {
-  if (!notes) return { url: "", notes: "" }
-  const match = notes.match(/^Posting:\s*(\S+)(?:\n\n([\s\S]*))?$/)
-  if (!match) return { url: "", notes }
-  return { url: match[1] ?? "", notes: match[2] ?? "" }
-}
-
-function joinNotes(url: string, notes: string) {
-  const body = notes.trim()
-  const posting = url.trim()
-  if (!posting) return body || null
-  return body ? `Posting: ${posting}\n\n${body}` : `Posting: ${posting}`
-}
-
 const emptyForm = (): FormValues => ({
   company_name: "",
   role_title: "",
   applied_date: todayInputValue(),
   status: "applied",
-  job_url: "",
+  posting_url: "",
+  industry: "",
+  company_size: "",
+  channel: "",
+  resume_version: "",
+  work_mode: "",
+  location: "",
   job_description_text: "",
   experience_level: "",
   notes: "",
@@ -72,6 +71,7 @@ export function ApplicationsView() {
   const [apps, setApps] = useState<Application[]>([])
   const [analytics, setAnalytics] = useState<ApplicationAnalytics | null>(null)
   const [analyticsError, setAnalyticsError] = useState("")
+  const [recs, setRecs] = useState<Recommendations | null>(null)
   const [view, setView] = useState<"table" | "board">("table")
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Application | null>(null)
@@ -80,12 +80,21 @@ export function ApplicationsView() {
   const [detail, setDetail] = useState<Application | null>(null)
   const form = useForm<FormValues>({ resolver: formResolver(schema), defaultValues: emptyForm() })
 
+  async function refreshRecs() {
+    try {
+      setRecs(await getRecommendations())
+    } catch {
+      setRecs(null) // insights are optional; the tracker still works without them
+    }
+  }
+
   async function load() {
     setLoading(true)
     setError("")
     try {
       const rows = await listApplications()
       setApps(rows)
+      void getRecommendations().then(setRecs).catch(() => setRecs(null))
       try {
         setAnalytics(await getApplicationAnalytics(false))
         setAnalyticsError("")
@@ -114,7 +123,6 @@ export function ApplicationsView() {
   }, [params, form])
 
   function beginEdit(app: Application) {
-    const notes = splitNotes(app.notes)
     setEditing(app)
     setSkills(app.skills_highlighted)
     form.reset({
@@ -122,10 +130,16 @@ export function ApplicationsView() {
       role_title: app.role_title,
       applied_date: app.applied_date,
       status: app.status as FormValues["status"],
-      job_url: notes.url,
+      posting_url: app.posting_url ?? "",
+      industry: app.industry ?? "",
+      company_size: (app.company_size ?? "") as FormValues["company_size"],
+      channel: (app.channel ?? "") as FormValues["channel"],
+      resume_version: app.resume_version ?? "",
+      work_mode: (app.work_mode ?? "") as FormValues["work_mode"],
+      location: app.location ?? "",
       job_description_text: app.job_description_text ?? "",
       experience_level: (app.experience_level as FormValues["experience_level"]) || "",
-      notes: notes.notes,
+      notes: app.notes ?? "",
       interview_feedback: app.interview_feedback ?? "",
       outcome: app.outcome ?? "",
     })
@@ -141,7 +155,14 @@ export function ApplicationsView() {
       job_description_text: values.job_description_text.trim() || null,
       experience_level: (values.experience_level || null) as ExperienceLevel | null,
       skills_highlighted: skills,
-      notes: joinNotes(values.job_url, values.notes),
+      posting_url: values.posting_url.trim() || null,
+      industry: values.industry.trim() || null,
+      company_size: (values.company_size || null) as CompanySize | null,
+      channel: (values.channel || null) as ApplicationChannel | null,
+      resume_version: values.resume_version.trim() || null,
+      work_mode: (values.work_mode || null) as WorkMode | null,
+      location: values.location.trim() || null,
+      notes: values.notes.trim() || null,
       interview_feedback: values.interview_feedback.trim() || null,
       outcome: values.outcome.trim() || null,
     }
@@ -157,6 +178,7 @@ export function ApplicationsView() {
       }
       setOpen(false)
       setAnalytics(await getApplicationAnalytics(false))
+      void refreshRecs()
     } catch (err) {
       toast.error(errorMessage(err))
     }
@@ -167,6 +189,7 @@ export function ApplicationsView() {
     try {
       const updated = await updateApplication(app.id, { status })
       setApps((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      void refreshRecs()
     } catch (err) {
       toast.error(errorMessage(err))
     }
@@ -201,6 +224,8 @@ export function ApplicationsView() {
         <StatCard label="Rejections" value={String(byStatus.rejected ?? 0)} />
         <StatCard label="Offers" value={String(byStatus.offer ?? 0)} />
       </div>
+
+      <InsightsCard data={recs} />
 
       <Card>
         <CardHeader>
@@ -305,7 +330,7 @@ export function ApplicationsView() {
         </div>
       )}
 
-      <Modal open={open} onOpenChange={setOpen} title={editing ? "Edit application" : "Add application"} description="The posting URL is stored with your notes. The API does not have a separate URL field.">
+      <Modal open={open} onOpenChange={setOpen} title={editing ? "Edit application" : "Add application"} description="Channel, company size, industry and resume version are what the tracker learns from. All optional.">
         <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Company" htmlFor="company" error={form.formState.errors.company_name?.message}>
@@ -323,7 +348,44 @@ export function ApplicationsView() {
               </Select>
             </Field>
             <Field label="Job posting URL" htmlFor="url">
-              <Input id="url" placeholder="https://" {...form.register("job_url")} />
+              <Input id="url" placeholder="https://" {...form.register("posting_url")} />
+            </Field>
+            <Field label="How did you apply?" htmlFor="channel" hint="The tracker compares channels.">
+              <Select id="channel" {...form.register("channel")}>
+                <option value="">Not set</option>
+                <option value="referral">Referral</option>
+                <option value="direct">Company site (direct)</option>
+                <option value="job_board">Job board</option>
+                <option value="recruiter">Recruiter</option>
+                <option value="other">Other</option>
+              </Select>
+            </Field>
+            <Field label="Company size" htmlFor="size">
+              <Select id="size" {...form.register("company_size")}>
+                <option value="">Not set</option>
+                <option value="1-10">1–10</option>
+                <option value="11-50">11–50</option>
+                <option value="51-200">51–200</option>
+                <option value="201-1000">201–1000</option>
+                <option value="1001+">1001+</option>
+              </Select>
+            </Field>
+            <Field label="Industry" htmlFor="industry">
+              <Input id="industry" placeholder="e.g. edtech, healthcare" {...form.register("industry")} />
+            </Field>
+            <Field label="Resume version sent" htmlFor="resume-version" hint="A label such as v2-data.">
+              <Input id="resume-version" {...form.register("resume_version")} />
+            </Field>
+            <Field label="Work mode" htmlFor="mode">
+              <Select id="mode" {...form.register("work_mode")}>
+                <option value="">Not set</option>
+                <option value="remote">Remote</option>
+                <option value="hybrid">Hybrid</option>
+                <option value="onsite">On-site</option>
+              </Select>
+            </Field>
+            <Field label="Location" htmlFor="location">
+              <Input id="location" {...form.register("location")} />
             </Field>
             <Field label="Seniority asked for" htmlFor="level">
               <Select id="level" {...form.register("experience_level")}>
@@ -364,10 +426,13 @@ export function ApplicationsView() {
           <div className="space-y-3 text-sm">
             <Badge>{titleCase(detail.status)}</Badge>
             <p>Applied {formatDate(detail.applied_date)}{detail.reached_interview ? " · reached an interview" : ""}</p>
-            {splitNotes(detail.notes).url ? <p><a className="underline" href={splitNotes(detail.notes).url} target="_blank" rel="noreferrer">Job posting</a></p> : null}
+            {detail.posting_url ? <p><a className="underline" href={detail.posting_url} target="_blank" rel="noreferrer">Job posting</a></p> : null}
+            {[detail.channel && `via ${titleCase(detail.channel.replace("_", " "))}`, detail.company_size && `${detail.company_size} employees`, detail.industry, detail.work_mode && titleCase(detail.work_mode), detail.location, detail.resume_version && `resume ${detail.resume_version}`].filter(Boolean).length > 0 ? (
+              <p className="text-muted-foreground">{[detail.channel && `via ${titleCase(detail.channel.replace("_", " "))}`, detail.company_size && `${detail.company_size} employees`, detail.industry, detail.work_mode && titleCase(detail.work_mode), detail.location, detail.resume_version && `resume ${detail.resume_version}`].filter(Boolean).join(" · ")}</p>
+            ) : null}
             {detail.job_description_text ? <p className="whitespace-pre-wrap text-muted-foreground">{detail.job_description_text}</p> : null}
             {detail.skills_highlighted.length > 0 ? <p>Skills highlighted: {detail.skills_highlighted.join(", ")}</p> : null}
-            {splitNotes(detail.notes).notes ? <p>{splitNotes(detail.notes).notes}</p> : null}
+            {detail.notes ? <p>{detail.notes}</p> : null}
             {detail.interview_feedback ? <p>Feedback: {detail.interview_feedback}</p> : null}
             {detail.outcome ? <p>Outcome: {detail.outcome}</p> : null}
             <Button variant="outline" onClick={() => { setDetail(null); beginEdit(detail) }}>Edit</Button>
@@ -387,6 +452,7 @@ export function ApplicationsView() {
                   setPendingDelete(null)
                   toast.success("Application deleted.")
                   setAnalytics(await getApplicationAnalytics(false))
+                  void refreshRecs()
                 })
                 .catch((err) => toast.error(errorMessage(err)))
             }}

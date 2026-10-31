@@ -13,9 +13,10 @@ import { Field } from "@/components/ui/label"
 import { ProgressBar } from "@/components/ui/progress"
 import { errorMessage } from "@/lib/api"
 import { formatDateTime, titleCase } from "@/lib/format"
-import { createInterview, evaluateInterview, getInterview, listInterviews, submitAnswer } from "@/services/interview.service"
+import { EvaluationBreakdown, RubricPanel } from "@/components/interviews/rubric"
+import { createInterview, evaluateInterview, getInterview, getRubric, listInterviews, submitAnswer } from "@/services/interview.service"
 import { getProfile } from "@/services/profile.service"
-import type { Interview, InterviewSummary, InterviewType } from "@/types/api"
+import type { Interview, InterviewSummary, InterviewType, Rubric } from "@/types/api"
 
 const CRITERIA = [
   ["technical_correctness", "Technical correctness"],
@@ -30,6 +31,7 @@ type Phase = "list" | "session" | "report"
 export function InterviewView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [rubric, setRubric] = useState<Rubric | null>(null)
   const [history, setHistory] = useState<InterviewSummary[]>([])
   const [role, setRole] = useState("")
   const [type, setType] = useState<InterviewType>("mixed")
@@ -130,6 +132,9 @@ export function InterviewView() {
       setWorking("evaluate")
       const evaluated = ordered(await evaluateInterview(interview.id, [question.id]))
       setInterview(evaluated)
+      if (evaluated.adaptation?.proposal_plan_id) {
+        toast.info(evaluated.adaptation.message, { description: evaluated.adaptation.reasons.join(" · "), duration: 10000 })
+      }
       setHistory(await listInterviews())
     } catch (err) {
       toast.error(errorMessage(err))
@@ -148,6 +153,10 @@ export function InterviewView() {
     setIndex(nextIndex)
     setAnswer(interview.questions[nextIndex]?.answer_text ?? "")
   }
+
+  useEffect(() => {
+    void getRubric().then(setRubric).catch(() => setRubric(null))
+  }, [])
 
   if (loading) return <PageSkeleton />
   if (error) return <ErrorState message={error} onRetry={() => void load()} />
@@ -183,14 +192,11 @@ export function InterviewView() {
           ) : null}
         </div>
         {working === "evaluate" ? <p className="text-sm text-muted-foreground">Evaluating your answer…</p> : null}
+        {!feedback ? <RubricPanel rubric={rubric} /> : null}
         {feedback ? (
           <div className="space-y-3 rounded-xl border border-border bg-card p-5 text-sm">
             <p className="text-base font-medium">This answer · {feedback.overall_score}/10</p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {CRITERIA.map(([key, label]) => (
-                <p key={key}><span className="text-muted-foreground">{label}: </span>{feedback.scores[key] ?? "—"}/10</p>
-              ))}
-            </div>
+            <EvaluationBreakdown evaluation={feedback} rubric={rubric} />
             {feedback.strengths.length > 0 ? <p><span className="font-medium">Strengths: </span>{feedback.strengths.join(" ")}</p> : null}
             {feedback.improvements.length > 0 ? <p><span className="font-medium">Improvements: </span>{feedback.improvements.join(" ")}</p> : null}
             {feedback.suggested_answer_improvements ? <p>{feedback.suggested_answer_improvements}</p> : null}
@@ -219,6 +225,19 @@ export function InterviewView() {
         ) : (
           <EmptyState title="No criterion scores" description="Evaluate at least one answer to see the report chart." />
         )}
+        <div className="space-y-3">
+          <h2 className="font-medium">Answer by answer</h2>
+          {interview.questions.filter((item) => item.evaluation).map((item) => (
+            <details key={item.id} className="rounded-xl border border-border bg-card p-4 text-sm">
+              <summary className="cursor-pointer font-medium">Q{item.order_index}. {item.question_text} · {item.evaluation?.overall_score}/10</summary>
+              <div className="mt-3 space-y-3">
+                {item.answer_text ? <p className="whitespace-pre-wrap text-muted-foreground">{item.answer_text}</p> : null}
+                {item.evaluation ? <EvaluationBreakdown evaluation={item.evaluation} rubric={rubric} /> : null}
+              </div>
+            </details>
+          ))}
+        </div>
+        <RubricPanel rubric={rubric} />
         <div className="grid gap-4 md:grid-cols-2">
           <ReportList title="Strengths" items={summary.top_strengths ?? []} empty="No strengths were recorded." />
           <ReportList title="Weakest skills" items={summary.weakest_skills ?? []} empty="No weak skills were flagged." />
@@ -246,6 +265,7 @@ export function InterviewView() {
         title="Mock interview"
         description="Choose a role and interview type. Each question is scored after you submit it. Question difficulty is assigned per question by the coach."
       />
+      <RubricPanel rubric={rubric} defaultOpen />
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-4 rounded-xl border border-border bg-card p-5">
           <Field label="Target role" htmlFor="role" hint="Leave blank to use the role on your profile.">

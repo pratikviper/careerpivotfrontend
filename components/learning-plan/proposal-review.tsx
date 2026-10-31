@@ -22,6 +22,8 @@ export function ProposalReview({
   const added = change.added_skills ?? []
   const removed = change.removed_skills ?? []
   const hours = change.hours_changes ?? {}
+  const reasons = change.reasons ?? []
+  const automatic = change.triggered_by?.startsWith("auto:") ?? false
 
   async function accept() {
     try {
@@ -49,10 +51,19 @@ export function ProposalReview({
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle>{plan.title}</CardTitle>
           <Badge variant="warning">Proposed · not applied</Badge>
+          {automatic ? <Badge variant="outline">Suggested automatically</Badge> : null}
         </div>
         <p className="text-sm text-muted-foreground">{note || plan.adjustment_reason || plan.summary || "Review these changes before replacing your active plan."}</p>
       </CardHeader>
       <CardContent className="space-y-4">
+        {reasons.length > 0 ? (
+          <div>
+            <p className="text-sm font-medium">Why this was proposed</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+              {reasons.map((reason) => <li key={reason}>{reason}</li>)}
+            </ul>
+          </div>
+        ) : null}
         <dl className="grid gap-3 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-muted-foreground">Weeks</dt>

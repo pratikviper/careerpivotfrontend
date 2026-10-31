@@ -15,7 +15,7 @@ import { Modal } from "@/components/ui/modal"
 import { LevelMeter } from "@/components/ui/progress"
 import { errorMessage } from "@/lib/api"
 import { formatDateTime, proficiencyLabel, titleCase } from "@/lib/format"
-import { createJob, deleteJob, listJobs } from "@/services/jobs.service"
+import { createJob, deleteJob, importMarketJobs, listJobs } from "@/services/jobs.service"
 import { getProfile } from "@/services/profile.service"
 import { analyzeSkillGap, getAnalysis, listAnalyses } from "@/services/skill-gap.service"
 import type { JobSummary, SkillGapItem, SkillGapReport, SkillGapSummary } from "@/types/api"
@@ -83,11 +83,34 @@ export function SkillGapView() {
       Required: item.required_proficiency,
     }))
 
+  async function onImportMarket() {
+    setBusy(true)
+    try {
+      const result = await importMarketJobs({ target_role: targetRole })
+      const refreshed = await listJobs()
+      setJobs(refreshed)
+      setSelectedJobs(refreshed.map((job) => job.id))
+      const origin = result.source === "seed" ? "built-in sample postings" : `${result.source} job board${result.cached ? " (cached)" : ""}`
+      toast.success(
+        result.imported > 0
+          ? `Imported ${result.imported} postings from ${origin}.`
+          : `Those ${result.skipped_duplicates} postings were already saved.`,
+        { description: result.source === "seed" ? "Sample data is synthetic, not real job-market data. Add a JSearch or Adzuna key for live postings." : undefined },
+      )
+    } catch (err) {
+      toast.error(errorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function onAnalyze() {
     setBusy(true)
     try {
+      // With everything selected, let the API pick the postings that match the target role.
+      const everything = selectedJobs.length === jobs.length
       const next = await analyzeSkillGap({
-        job_description_ids: selectedJobs,
+        job_description_ids: everything ? undefined : selectedJobs,
         target_role: targetRole,
       })
       setReport(next)
@@ -158,6 +181,7 @@ export function SkillGapView() {
         description="Compare your confirmed skills with the requirements in saved job descriptions. Scores come only from that analysis."
         actions={
           <>
+            <Button variant="outline" onClick={() => void onImportMarket()} disabled={busy}>Import postings for my role</Button>
             <Button variant="outline" onClick={() => setShowJob(true)}>Add job description</Button>
             <Button onClick={() => void onAnalyze()} disabled={busy || jobs.length === 0}>
               {busy ? "Working…" : "Run analysis"}
@@ -175,7 +199,7 @@ export function SkillGapView() {
             <Input id="target-role" value={targetRole} onChange={(event) => setTargetRole(event.target.value)} />
           </Field>
           {jobs.length === 0 ? (
-            <EmptyState title="No job descriptions yet" description="Add at least one posting with extractable skills. The analysis uses those requirements, not general market statistics." action={<Button onClick={() => setShowJob(true)}>Add job description</Button>} />
+            <EmptyState title="No job descriptions yet" description="Add at least one posting with extractable skills. The analysis uses those requirements, not general market statistics." action={<div className="flex flex-wrap gap-2"><Button onClick={() => void onImportMarket()} disabled={busy}>Import postings for my role</Button><Button variant="outline" onClick={() => setShowJob(true)}>Add job description</Button></div>} />
           ) : (
             <ul className="space-y-2">
               {jobs.map((job) => (
@@ -225,6 +249,7 @@ export function SkillGapView() {
             <Card><CardContent><p className="text-sm text-muted-foreground">Partial</p><p className="mt-2 text-2xl font-semibold">{partial}</p></CardContent></Card>
             <Card><CardContent><p className="text-sm text-muted-foreground">Missing</p><p className="mt-2 text-2xl font-semibold">{missing}</p></CardContent></Card>
           </div>
+          <p className="text-sm font-medium">{report.based_on}{report.job_sources.seed ? " — sample data, not real market statistics" : ""}</p>
           {report.summary ? <p className="text-sm text-muted-foreground">{report.summary}</p> : null}
           <div className="flex flex-wrap items-center gap-2">
             <Select className="max-w-48" value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Filter skills">
